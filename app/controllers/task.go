@@ -22,9 +22,14 @@ func (this *TaskController) List() {
 		page = 1
 	}
 	groupId, _ := this.GetInt("groupid")
+	keyword := strings.TrimSpace(this.GetString("keyword"))
+
 	filters := make([]interface{}, 0)
 	if groupId > 0 {
 		filters = append(filters, "group_id", groupId)
+	}
+	if keyword != "" {
+		filters = append(filters, "task_name__contains", keyword)
 	}
 	result, count := models.TaskGetList(page, this.pageSize, filters...)
 
@@ -66,7 +71,8 @@ func (this *TaskController) List() {
 	this.Data["list"] = list
 	this.Data["groups"] = groups
 	this.Data["groupid"] = groupId
-	this.Data["pageBar"] = libs.NewPager(page, int(count), this.pageSize, beego.URLFor("TaskController.List", "groupid", groupId), true).ToString()
+	this.Data["keyword"] = keyword
+	this.Data["pageBar"] = libs.NewPager(page, int(count), this.pageSize, beego.URLFor("TaskController.List", "groupid", groupId, "keyword", keyword), true).ToString()
 	this.display()
 }
 

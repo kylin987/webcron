@@ -28,14 +28,16 @@
 			<a href="{{urlfor "TaskController.Add"}}" class="btn btn-large btn-info"><span class="icon-plus"></span> 新建任务</a>
 			</div>
 			
-			<div class="btn-group  btn-large" style="float:right">
-			<form method="post" name="s" action="{{urlfor "TaskController.List"}}">
-				<select name="groupid" class="btn-large">
+			<div class="pull-right">
+			<form method="get" name="s" action="{{urlfor "TaskController.List"}}" class="form-inline" style="margin: 0;">
+				<select name="groupid" style="width: 140px; margin-bottom: 0;">
 					<option value="0">全部分组</option>
 					{{range $k, $v := .groups}}
 					<option value="{{$v.Id}}" {{if eq $v.Id $.groupid}}selected{{end}}>{{$v.GroupName}}</option>
 					{{end}}
 				</select>
+				<input type="text" name="keyword" class="input-medium" placeholder="搜索任务名称" value="{{.keyword}}" style="margin-left: 5px; margin-bottom: 0;">
+				<button type="submit" class="btn btn-primary" style="margin-left: 5px; margin-bottom: 0;"><i class="icon-search icon-white"></i> 搜索</button>
 			</form>
 			</div>
 			
