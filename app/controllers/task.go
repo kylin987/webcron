@@ -33,10 +33,29 @@ func (this *TaskController) List() {
 	}
 	result, count := models.TaskGetList(page, this.pageSize, filters...)
 
+	// 分组列表
+	groups, _ := models.TaskGroupGetList(1, 100)
+
+	groupIds := make([]int, 0)
+	groupIdExists := make(map[int]bool)
+	for _, task := range result {
+		if task.GroupId > 0 && !groupIdExists[task.GroupId] {
+			groupIds = append(groupIds, task.GroupId)
+			groupIdExists[task.GroupId] = true
+		}
+	}
+
+	taskGroups, _ := models.TaskGroupGetByIds(groupIds)
+	groupNames := make(map[int]string, len(taskGroups))
+	for _, group := range taskGroups {
+		groupNames[group.Id] = group.GroupName
+	}
+
 	list := make([]map[string]interface{}, len(result))
 	for k, v := range result {
 		row := make(map[string]interface{})
 		row["id"] = v.Id
+		row["group_name"] = groupNames[v.GroupId]
 		row["name"] = v.TaskName
 		row["cron_spec"] = v.CronSpec
 		row["status"] = v.Status
@@ -63,9 +82,6 @@ func (this *TaskController) List() {
 		}
 		list[k] = row
 	}
-
-	// 分组列表
-	groups, _ := models.TaskGroupGetList(1, 100)
 
 	this.Data["pageTitle"] = "任务列表"
 	this.Data["list"] = list

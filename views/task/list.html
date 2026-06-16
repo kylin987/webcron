@@ -68,6 +68,7 @@
 					<span class="icon-play-circle" style="color:green"></span>
 					{{end}}
 					<span data-toggle="tooltip" data-placement="bottom" title="{{$v.description}}">
+					{{if $v.group_name}}<span class="label label-info">{{$v.group_name}}</span> {{end}}
 					{{$v.name}}
 					</span>
 					</td>

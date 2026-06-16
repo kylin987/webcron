@@ -62,3 +62,13 @@ func TaskGroupGetList(page, pageSize int) ([]*TaskGroup, int64) {
 
 	return list, total
 }
+
+func TaskGroupGetByIds(ids []int) ([]*TaskGroup, error) {
+	list := make([]*TaskGroup, 0)
+	if len(ids) == 0 {
+		return list, nil
+	}
+
+	_, err := orm.NewOrm().QueryTable(TableName("task_group")).Filter("id__in", ids).All(&list)
+	return list, err
+}
