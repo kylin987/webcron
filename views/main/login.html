@@ -38,14 +38,16 @@
 			
 				<p class="text-error">{{.flash.error}}&nbsp;</p>
 				
-				<div class="field">
+				<div class="field field-with-icon">
 					<label for="username">帐号</label>
-					<input type="text" id="username" name="username" value="" placeholder="Username" class="login username-field" />
+					<i class="icon-user field-icon"></i>
+					<input type="text" id="username" name="username" value="" placeholder="Username" class="login" autofocus />
 				</div> <!-- /field -->
-				
-				<div class="field">
+
+				<div class="field field-with-icon">
 					<label for="password">密码</label>
-					<input type="password" id="password" name="password" value="" placeholder="Password" class="login password-field"/>
+					<i class="icon-lock field-icon"></i>
+					<input type="password" id="password" name="password" value="" placeholder="Password" class="login"/>
 				</div> <!-- /password -->
 				
 			</div> <!-- /login-fields -->

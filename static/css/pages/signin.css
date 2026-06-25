@@ -57,6 +57,23 @@ body{ background: url(../../img/body-bg.png); color:#838383; font: 13px/1.7em 'O
 
 .password-field { background: url(../../img/signin/password.png) no-repeat; }
 
+/* MFA 动态验证码输入框：用 Font Awesome 图标，字号放大便于读 6 位数字 */
+.field-with-icon { position: relative; }
+.field-with-icon .field-icon {
+	position: absolute;
+	left: 14px;
+	top: 50%;
+	transform: translateY(-50%);
+	color: #9c9c9c;
+	font-size: 22px;
+	pointer-events: none;
+}
+.login-fields input.code-field {
+	font-size: 20px;
+	letter-spacing: 6px;
+	font-weight: bold;
+}
+
 
 
 

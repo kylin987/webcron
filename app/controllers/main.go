@@ -6,6 +6,7 @@ import (
 	"github.com/lisijie/webcron/app/jobs"
 	"github.com/lisijie/webcron/app/libs"
 	"github.com/lisijie/webcron/app/models"
+	"html/template"
 	"runtime"
 	"strconv"
 	"strings"
@@ -86,13 +87,14 @@ func (this *MainController) Profile() {
 
 	if this.isPost() {
 		flash := beego.NewFlash()
-		user.Email = this.GetString("email")
-		user.Update()
+		before := userSnapshot(user)
+		email := strings.TrimSpace(this.GetString("email"))
 		password1 := this.GetString("password1")
 		password2 := this.GetString("password2")
+		passwordChanged := false
 		if password1 != "" {
-			if len(password1) < 6 {
-				flash.Error("密码长度必须大于6位")
+			if len(password1) < 8 {
+				flash.Error("密码长度必须至少8位")
 				flash.Store(&this.Controller)
 				this.redirect(beego.URLFor(".Profile"))
 			} else if password2 != password1 {
@@ -102,9 +104,24 @@ func (this *MainController) Profile() {
 			} else {
 				user.Salt = string(utils.RandomCreateBytes(10))
 				user.Password = libs.Md5([]byte(password1 + user.Salt))
-				user.Update()
+				passwordChanged = true
 			}
 		}
+		user.Email = email
+		user.Update()
+		after := userSnapshot(user)
+		if passwordChanged {
+			this.audit("user_reset_password", "user", user.Id, models.OP_RESULT_OK, map[string]interface{}{
+				"before": before,
+				"after":  after,
+				"scope":  "profile",
+			})
+		}
+		this.audit("user_update", "user", user.Id, models.OP_RESULT_OK, map[string]interface{}{
+			"before": before,
+			"after":  after,
+			"scope":  "profile",
+		})
 		flash.Success("修改成功！")
 		flash.Store(&this.Controller)
 		this.redirect(beego.URLFor(".Profile"))
@@ -126,29 +143,30 @@ func (this *MainController) Login() {
 
 		username := strings.TrimSpace(this.GetString("username"))
 		password := strings.TrimSpace(this.GetString("password"))
-		remember := this.GetString("remember")
+		remember := this.GetString("remember") != ""
 		if username != "" && password != "" {
 			user, err := models.UserGetByName(username)
 			errorMsg := ""
 			if err != nil || user.Password != libs.Md5([]byte(password+user.Salt)) {
 				errorMsg = "帐号或密码错误"
+				this.auditWithUser(0, "", "login_failed", "user", 0, models.OP_RESULT_ERR, map[string]interface{}{
+					"user_name": username,
+					"reason":    "invalid_password",
+				})
 			} else if user.Status == -1 {
 				errorMsg = "该帐号已禁用"
+				this.auditWithUser(user.Id, user.UserName, "login_failed", "user", user.Id, models.OP_RESULT_ERR, map[string]interface{}{
+					"user_name": user.UserName,
+					"reason":    "disabled",
+				})
 			} else {
-				user.LastIp = this.getClientIp()
-				user.LastLogin = time.Now().Unix()
-				models.UserUpdate(user)
-
-				authkey := libs.Md5([]byte(this.getClientIp() + "|" + user.Password + user.Salt))
-				if remember == "yes" {
-					this.Ctx.SetCookie("auth", strconv.Itoa(user.Id)+"|"+authkey, 7*86400)
-				} else {
-					this.Ctx.SetCookie("auth", strconv.Itoa(user.Id)+"|"+authkey)
+				this.setPendingMfa(user.Id, remember)
+				if user.MfaEnabled == 1 {
+					this.redirect(beego.URLFor("MainController.MfaVerify"))
 				}
-
-				this.redirect(beego.URLFor("TaskController.List"))
+				this.redirect(beego.URLFor("MainController.MfaSetup"))
 			}
-			flash.Error(errorMsg)
+			flash.Error("%s", errorMsg)
 			flash.Store(&this.Controller)
 			this.redirect(beego.URLFor("MainController.Login"))
 		}
@@ -157,8 +175,93 @@ func (this *MainController) Login() {
 	this.TplName = "main/login.html"
 }
 
+func (this *MainController) MfaSetup() {
+	user, ok := this.pendingMfaUser()
+	if !ok {
+		this.redirect(beego.URLFor("MainController.Login"))
+	}
+	if user.MfaEnabled == 1 {
+		this.redirect(beego.URLFor("MainController.MfaVerify"))
+	}
+
+	secret := this.pendingMfaSecret()
+	if secret == "" {
+		var err error
+		secret, err = libs.NewTOTPSecret()
+		if err != nil {
+			this.showMsg("生成MFA密钥失败")
+		}
+		this.SetSession("pending_mfa_secret", secret)
+	}
+
+	if this.isPost() {
+		code := strings.TrimSpace(this.GetString("code"))
+		if libs.VerifyTOTP(secret, code, time.Now()) {
+			user.MfaSecret = secret
+			user.MfaEnabled = 1
+			user.MfaConfirmedAt = time.Now().Unix()
+			user.Update()
+			this.auditWithUser(user.Id, user.UserName, "mfa_setup_success", "user", user.Id, models.OP_RESULT_OK, map[string]interface{}{
+				"user_name": user.UserName,
+			})
+			this.finishMfaLogin(user)
+		}
+		this.auditWithUser(user.Id, user.UserName, "mfa_setup_failed", "user", user.Id, models.OP_RESULT_ERR, map[string]interface{}{
+			"user_name": user.UserName,
+		})
+		flash := beego.NewFlash()
+		flash.Error("动态验证码错误")
+		flash.Store(&this.Controller)
+		this.redirect(beego.URLFor("MainController.MfaSetup"))
+	}
+
+	beego.ReadFromRequest(&this.Controller)
+	this.Data["pageTitle"] = "绑定MFA"
+	this.Data["user"] = user
+	qrCode, err := libs.TOTPQRCodeBase64(libs.TOTPURI(beego.AppConfig.String("site.name"), user.UserName, secret))
+	if err != nil {
+		this.showMsg("生成二维码失败")
+	}
+	this.Data["qrCode"] = template.URL(qrCode)
+	this.TplName = "main/mfa_setup.html"
+}
+
+func (this *MainController) MfaVerify() {
+	user, ok := this.pendingMfaUser()
+	if !ok {
+		this.redirect(beego.URLFor("MainController.Login"))
+	}
+	if user.MfaEnabled != 1 {
+		this.redirect(beego.URLFor("MainController.MfaSetup"))
+	}
+
+	if this.isPost() {
+		code := strings.TrimSpace(this.GetString("code"))
+		if libs.VerifyTOTP(user.MfaSecret, code, time.Now()) {
+			this.finishMfaLogin(user)
+		}
+		this.auditWithUser(user.Id, user.UserName, "mfa_verify_failed", "user", user.Id, models.OP_RESULT_ERR, map[string]interface{}{
+			"user_name": user.UserName,
+		})
+		flash := beego.NewFlash()
+		flash.Error("动态验证码错误")
+		flash.Store(&this.Controller)
+		this.redirect(beego.URLFor("MainController.MfaVerify"))
+	}
+
+	beego.ReadFromRequest(&this.Controller)
+	this.Data["pageTitle"] = "MFA验证"
+	this.Data["user"] = user
+	this.TplName = "main/mfa_verify.html"
+}
+
 // 退出登录
 func (this *MainController) Logout() {
+	if this.userId > 0 {
+		this.audit("logout", "user", this.userId, models.OP_RESULT_OK, map[string]interface{}{
+			"user_name": this.userName,
+		})
+	}
 	this.Ctx.SetCookie("auth", "")
 	this.redirect(beego.URLFor("MainController.Login"))
 }
@@ -168,4 +271,62 @@ func (this *MainController) GetTime() {
 	out := make(map[string]interface{})
 	out["time"] = time.Now().UnixNano() / int64(time.Millisecond)
 	this.jsonResult(out)
+}
+
+func (this *MainController) setPendingMfa(userId int, remember bool) {
+	this.SetSession("pending_mfa_user_id", userId)
+	if remember {
+		this.SetSession("pending_mfa_remember", 1)
+	} else {
+		this.SetSession("pending_mfa_remember", 0)
+	}
+	this.DelSession("pending_mfa_secret")
+}
+
+func (this *MainController) pendingMfaUser() (*models.User, bool) {
+	v := this.GetSession("pending_mfa_user_id")
+	userId := 0
+	switch val := v.(type) {
+	case int:
+		userId = val
+	case int64:
+		userId = int(val)
+	case string:
+		userId, _ = strconv.Atoi(val)
+	}
+	if userId < 1 {
+		return nil, false
+	}
+	user, err := models.UserGetById(userId)
+	if err != nil || user.Status == -1 {
+		return nil, false
+	}
+	return user, true
+}
+
+func (this *MainController) pendingMfaSecret() string {
+	if secret, ok := this.GetSession("pending_mfa_secret").(string); ok {
+		return secret
+	}
+	return ""
+}
+
+func (this *MainController) finishMfaLogin(user *models.User) {
+	user.LastIp = this.getClientIp()
+	user.LastLogin = time.Now().Unix()
+	models.UserUpdate(user)
+
+	remember := false
+	if value, ok := this.GetSession("pending_mfa_remember").(int); ok && value == 1 {
+		remember = true
+	}
+	this.setLoginUser(user)
+	this.setAuthCookie(user, remember)
+	this.DelSession("pending_mfa_user_id")
+	this.DelSession("pending_mfa_remember")
+	this.DelSession("pending_mfa_secret")
+	this.auditWithUser(user.Id, user.UserName, "login_success", "user", user.Id, models.OP_RESULT_OK, map[string]interface{}{
+		"user_name": user.UserName,
+	})
+	this.redirect(beego.URLFor("TaskController.List"))
 }

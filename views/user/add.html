@@ -1,0 +1,120 @@
+<div class="row">
+<div class="span12">
+	<div class="widget ">
+		<div class="widget-header">
+			<i class="icon-plus"></i>
+			<h3>添加账号</h3>
+		</div>
+
+		<div class="widget-content">
+			<div class="alert alert-danger hide" role="alert"></div>
+
+			<form action="{{urlfor "UserController.Add"}}" method="post" class="form-horizontal">
+				<fieldset>
+					<div class="control-group">
+						<label class="control-label" for="user_name">用户名</label>
+						<div class="controls">
+							<input type="text" name="user_name" class="span4" id="user_name">
+							<p class="help-block">密码由系统随机生成，创建成功后仅展示一次。首次登录后必须绑定MFA。</p>
+						</div>
+					</div>
+
+					<div class="form-actions">
+						<button type="submit" class="btn btn-primary">保 存</button>
+						<a href="{{urlfor "UserController.List"}}" class="btn">返 回</a>
+					</div>
+				</fieldset>
+			</form>
+		</div>
+	</div>
+</div>
+</div>
+
+<!-- 账号创建成功：一次性展示账号密码弹窗 -->
+<div id="accountModal" class="modal hide fade" tabindex="-1" role="dialog" aria-hidden="true">
+	<div class="modal-header">
+		<button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+		<h3>账号创建成功</h3>
+	</div>
+	<div class="modal-body">
+		<div class="alert alert-warning">
+			<strong>注意：</strong>密码仅展示这一次，关闭后将无法再次查看，请立即复制保存并转交对应人员。
+		</div>
+		<form class="form-horizontal">
+			<div class="control-group">
+				<label class="control-label">用户名</label>
+				<div class="controls">
+					<input type="text" id="newUserName" class="span4" readonly>
+				</div>
+			</div>
+			<div class="control-group">
+				<label class="control-label">密码</label>
+				<div class="controls">
+					<input type="text" id="newUserPassword" class="span4" readonly>
+				</div>
+			</div>
+			<div class="control-group">
+				<div class="controls">
+					<button type="button" class="btn btn-info btn-copy" data-target="both"><i class="icon-copy icon-white"></i> 复制账号和密码</button>
+				</div>
+			</div>
+		</form>
+	</div>
+	<div class="modal-footer">
+		<button class="btn" data-dismiss="modal">关闭</button>
+		<a class="btn btn-primary btn-done">我已保存，进入列表</a>
+	</div>
+</div>
+
+<script>
+$(function () {
+	$("form").submit(function () {
+		$(".alert").hide();
+		$("button[type='submit']").attr('disabled', true);
+		$.post('{{urlfor "UserController.Add"}}', $(this).serialize(), function (out) {
+			if (out.status == 0) {
+				// out.msg = {user_name, password}，一次性弹窗展示
+				$("#newUserName").val(out.msg.user_name);
+				$("#newUserPassword").val(out.msg.password);
+				$("#accountModal").modal('show');
+				$("button[type='submit']").attr('disabled', false);
+			} else {
+				$(".alert").text(out.msg).show();
+				$("button[type='submit']").attr('disabled', false);
+			}
+		}, "json");
+		return false;
+	});
+
+	// 复制
+	$(".btn-copy").click(function () {
+		var text = "用户名: " + $("#newUserName").val() + "\n密码: " + $("#newUserPassword").val();
+		copyText(text);
+	});
+
+	// 兼容性复制：优先 navigator.clipboard，否则用隐藏 textarea + execCommand
+	function copyText(text) {
+		if (navigator.clipboard && navigator.clipboard.writeText) {
+			navigator.clipboard.writeText(text).then(function () {
+				flashCopyOk();
+			});
+			return;
+		}
+		var $ta = $('<textarea></textarea>').css({position:'fixed',top:-1000,left:-1000}).val(text).appendTo('body');
+		$ta[0].select();
+		try { document.execCommand('copy'); flashCopyOk(); } catch (e) {}
+		$ta.remove();
+	}
+	function flashCopyOk() {
+		var $btn = $(".btn-copy");
+		var old = $btn.html();
+		$btn.html('<i class="icon-ok icon-white"></i> 已复制').attr('disabled', true);
+		setTimeout(function () { $btn.html(old).attr('disabled', false); }, 1500);
+	}
+
+	// 关闭弹窗后进入列表
+	$(".btn-done").click(function () {
+		window.location.href = '{{urlfor "UserController.List"}}';
+	});
+});
+</script>

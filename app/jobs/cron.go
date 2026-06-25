@@ -17,10 +17,26 @@ func init() {
 		workPool = make(chan bool, size)
 	}
 	mainCron = cron.New()
-	mainCron.Start()
+	// 本地模式下不启动调度器，避免定时任务被自动触发；
+	// 手动执行（Job.Run）不经过调度器，仍然可用。
+	if !IsLocalMode() {
+		mainCron.Start()
+	}
+}
+
+// IsLocalMode 本地模式下不自动执行任何定时任务，仅保留手动运行与页面操作。
+// 通过配置 jobs.local = true 开启，便于本地开发调试时连线上库而不触发真实任务。
+func IsLocalMode() bool {
+	v, _ := beego.AppConfig.Bool("jobs.local")
+	return v
 }
 
 func AddJob(spec string, job *Job) bool {
+	if IsLocalMode() {
+		beego.Info("本地模式已开启，跳过任务调度注册: ", job.id)
+		return false
+	}
+
 	lock.Lock()
 	defer lock.Unlock()
 

@@ -33,10 +33,12 @@ func (this *GroupController) Add() {
 		group.UserId = this.userId
 		group.Description = strings.TrimSpace(this.GetString("description"))
 
-		_, err := models.TaskGroupAdd(group)
+		id, err := models.TaskGroupAdd(group)
 		if err != nil {
 			this.ajaxMsg(err.Error(), MSG_ERR)
 		}
+		group.Id = int(id)
+		this.audit("group_create", "group", group.Id, models.OP_RESULT_OK, groupSnapshot(group))
 		this.ajaxMsg("", MSG_OK)
 	}
 
@@ -53,12 +55,17 @@ func (this *GroupController) Edit() {
 	}
 
 	if this.isPost() {
+		before := groupSnapshot(group)
 		group.GroupName = strings.TrimSpace(this.GetString("group_name"))
 		group.Description = strings.TrimSpace(this.GetString("description"))
 		err := group.Update()
 		if err != nil {
 			this.ajaxMsg(err.Error(), MSG_ERR)
 		}
+		this.audit("group_update", "group", group.Id, models.OP_RESULT_OK, map[string]interface{}{
+			"before": before,
+			"after":  groupSnapshot(group),
+		})
 		this.ajaxMsg("", MSG_OK)
 	}
 
@@ -81,10 +88,24 @@ func (this *GroupController) Batch() {
 		}
 		switch action {
 		case "delete":
-			models.TaskGroupDelById(id)
-			models.TaskResetGroupId(id)
+			if group, err := models.TaskGroupGetById(id); err == nil {
+				before := groupSnapshot(group)
+				models.TaskGroupDelById(id)
+				models.TaskResetGroupId(id)
+				this.audit("group_batch_delete", "group", id, models.OP_RESULT_OK, before)
+			}
 		}
 	}
 
 	this.ajaxMsg("", MSG_OK)
+}
+
+func groupSnapshot(group *models.TaskGroup) map[string]interface{} {
+	return map[string]interface{}{
+		"id":          group.Id,
+		"user_id":     group.UserId,
+		"group_name":  group.GroupName,
+		"description": group.Description,
+		"create_time": group.CreateTime,
+	}
 }

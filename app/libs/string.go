@@ -2,7 +2,9 @@ package libs
 
 import (
 	"crypto/md5"
+	"crypto/rand"
 	"fmt"
+	"math/big"
 	"regexp"
 )
 
@@ -27,4 +29,20 @@ func SizeFormat(size float64) string {
 
 func IsEmail(b []byte) bool {
 	return emailPattern.Match(b)
+}
+
+// 强密码字符集：大小写字母 + 数字 + 常见符号，避免易混淆字符 0/O/l/I/1
+var passwordLetters = []byte("ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*()-_=+")
+
+// GeneratePassword 生成指定长度的随机强密码，包含大小写字母、数字与符号。
+func GeneratePassword(length int) string {
+	if length < 8 {
+		length = 16
+	}
+	buf := make([]byte, length)
+	for i := range buf {
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(passwordLetters))))
+		buf[i] = passwordLetters[n.Int64()]
+	}
+	return string(buf)
 }

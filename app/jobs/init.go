@@ -9,6 +9,10 @@ import (
 )
 
 func InitJobs() {
+	if IsLocalMode() {
+		beego.Info("本地模式已开启，跳过定时任务自动注册。手动运行任务不受影响。")
+		return
+	}
 	list, _ := models.TaskGetList(1, 1000000, "status", 1)
 	for _, task := range list {
 		job, err := NewJobFromTask(task)

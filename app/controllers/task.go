@@ -128,9 +128,12 @@ func (this *TaskController) Add() {
 		if _, err := libcron.Parse(task.CronSpec); err != nil {
 			this.ajaxMsg("cron表达式无效", MSG_ERR)
 		}
-		if _, err := models.TaskAdd(task); err != nil {
+		id, err := models.TaskAdd(task)
+		if err != nil {
 			this.ajaxMsg(err.Error(), MSG_ERR)
 		}
+		task.Id = int(id)
+		this.audit("task_create", "task", task.Id, models.OP_RESULT_OK, taskSnapshot(task))
 
 		this.ajaxMsg("", MSG_OK)
 	}
@@ -152,6 +155,7 @@ func (this *TaskController) Edit() {
 	}
 
 	if this.isPost() {
+		before := taskSnapshot(task)
 		task.TaskName = strings.TrimSpace(this.GetString("task_name"))
 		task.Description = strings.TrimSpace(this.GetString("description"))
 		task.GroupId, _ = this.GetInt("group_id")
@@ -185,6 +189,10 @@ func (this *TaskController) Edit() {
 		if err := task.Update(); err != nil {
 			this.ajaxMsg(err.Error(), MSG_ERR)
 		}
+		this.audit("task_update", "task", task.Id, models.OP_RESULT_OK, map[string]interface{}{
+			"before": before,
+			"after":  taskSnapshot(task),
+		})
 
 		this.ajaxMsg("", MSG_OK)
 	}
@@ -273,7 +281,10 @@ func (this *TaskController) LogBatch() {
 		}
 		switch action {
 		case "delete":
-			models.TaskLogDelById(id)
+			if taskLog, err := models.TaskLogGetById(id); err == nil {
+				models.TaskLogDelById(id)
+				this.audit("task_log_delete", "task_log", id, models.OP_RESULT_OK, taskLogSnapshot(taskLog))
+			}
 		}
 	}
 
@@ -301,6 +312,7 @@ func (this *TaskController) Batch() {
 					jobs.AddJob(task.CronSpec, job)
 					task.Status = 1
 					task.Update()
+					this.audit("task_batch_active", "task", task.Id, models.OP_RESULT_OK, taskSnapshot(task))
 				}
 			}
 		case "pause":
@@ -308,11 +320,16 @@ func (this *TaskController) Batch() {
 			if task, err := models.TaskGetById(id); err == nil {
 				task.Status = 0
 				task.Update()
+				this.audit("task_batch_pause", "task", task.Id, models.OP_RESULT_OK, taskSnapshot(task))
 			}
 		case "delete":
-			models.TaskDel(id)
-			models.TaskLogDelByTaskId(id)
-			jobs.RemoveJob(id)
+			if task, err := models.TaskGetById(id); err == nil {
+				before := taskSnapshot(task)
+				models.TaskDel(id)
+				models.TaskLogDelByTaskId(id)
+				jobs.RemoveJob(id)
+				this.audit("task_batch_delete", "task", id, models.OP_RESULT_OK, before)
+			}
 		}
 	}
 
@@ -336,6 +353,7 @@ func (this *TaskController) Start() {
 	if jobs.AddJob(task.CronSpec, job) {
 		task.Status = 1
 		task.Update()
+		this.audit("task_start", "task", task.Id, models.OP_RESULT_OK, taskSnapshot(task))
 	}
 
 	refer := this.Ctx.Request.Referer()
@@ -357,6 +375,7 @@ func (this *TaskController) Pause() {
 	jobs.RemoveJob(id)
 	task.Status = 0
 	task.Update()
+	this.audit("task_pause", "task", task.Id, models.OP_RESULT_OK, taskSnapshot(task))
 
 	refer := this.Ctx.Request.Referer()
 	if refer == "" {
@@ -380,6 +399,41 @@ func (this *TaskController) Run() {
 	}
 
 	job.Run()
+	this.audit("task_manual_run", "task", task.Id, models.OP_RESULT_OK, map[string]interface{}{
+		"task":        taskSnapshot(task),
+		"task_log_id": job.GetLogId(),
+	})
 
 	this.redirect(beego.URLFor("TaskController.ViewLog", "id", job.GetLogId()))
+}
+
+func taskSnapshot(task *models.Task) map[string]interface{} {
+	return map[string]interface{}{
+		"id":            task.Id,
+		"user_id":       task.UserId,
+		"group_id":      task.GroupId,
+		"task_name":     task.TaskName,
+		"task_type":     task.TaskType,
+		"description":   task.Description,
+		"cron_spec":     task.CronSpec,
+		"concurrent":    task.Concurrent,
+		"command":       task.Command,
+		"status":        task.Status,
+		"notify":        task.Notify,
+		"notify_email":  task.NotifyEmail,
+		"timeout":       task.Timeout,
+		"execute_times": task.ExecuteTimes,
+		"prev_time":     task.PrevTime,
+		"create_time":   task.CreateTime,
+	}
+}
+
+func taskLogSnapshot(log *models.TaskLog) map[string]interface{} {
+	return map[string]interface{}{
+		"id":           log.Id,
+		"task_id":      log.TaskId,
+		"status":       log.Status,
+		"process_time": log.ProcessTime,
+		"create_time":  log.CreateTime,
+	}
 }

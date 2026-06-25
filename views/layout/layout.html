@@ -58,25 +58,39 @@
 		<div class="container">
 			<ul class="mainnav">
 				<li {{if eq .curRoute "main.index"}}class="active"{{end}}>
-					<a href="/">
+					<a href="{{urlfor "MainController.Index"}}">
 						<i class="icon-dashboard"></i>
 						<span>系统概况</span>
 					</a>	    				
 				</li>
 				<li {{if eq .curController "task"}}class="active"{{end}}>
-					<a href="/task/list">
+					<a href="{{urlfor "TaskController.List"}}">
 						<i class="icon-list-alt"></i>
 						<span>任务管理</span>
 					</a>    				
 				</li>
-				<li {{if eq .curController "group"}}class="active"{{end}}>					
-					<a href="/group/list">
+				<li {{if eq .curController "group"}}class="active"{{end}}>
+					<a href="{{urlfor "GroupController.List"}}">
 						<i class="icon-folder-close"></i>
 						<span>分组管理</span>
-					</a>  									
+					</a>
 				</li>
+				{{if .isAdmin}}
+				<li {{if eq .curController "user"}}class="active"{{end}}>
+					<a href="{{urlfor "UserController.List"}}">
+						<i class="icon-user"></i>
+						<span>账号管理</span>
+					</a>
+				</li>
+				<li {{if eq .curController "operationlog"}}class="active"{{end}}>
+					<a href="{{urlfor "OperationLogController.List"}}">
+						<i class="icon-eye-open"></i>
+						<span>操作审计</span>
+					</a>
+				</li>
+				{{end}}
 				<li {{if eq .curController "help"}}class="active"{{end}}>					
-					<a href="/help">
+					<a href="{{urlfor "HelpController.Index"}}">
 						<i class="icon-question-sign"></i>
 						<span>使用帮助</span>
 					</a>  									

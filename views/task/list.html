@@ -49,11 +49,11 @@
 			<tr>
 				<th width="20"><input type="checkbox" name="chkall" value="1"></td>
 				<th width="40">ID</th>
-				<th>任务名称</th>
+				<th style="min-width: 240px;">任务名称</th>
 				<th>时间表达式</th>
 				<th class="span2">上次执行时间</th>
 				<th class="span2">下次执行时间</th>
-				<th class="span5">操作</th>
+				<th width="340">操作</th>
 			</tr>
 			</thead>
 			<tbody>
@@ -75,7 +75,7 @@
 					<td>{{$v.cron_spec}}</td>
 					<td>{{$v.prev_time}}</td>
 					<td>{{$v.next_time}}</td>
-					<td>
+					<td style="white-space: nowrap;">
 						{{if eq $v.status 0}}
 						<a class="btn btn-danger" href="{{urlfor "TaskController.Start"}}?id={{$v.id}}">
 							<span class="icon-play-circle icon-white"></span> 激活

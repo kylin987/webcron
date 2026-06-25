@@ -1,0 +1,58 @@
+<div class="row">
+<div class="span12">
+	<div class="widget ">
+		<div class="widget-header">
+			<i class="icon-eye-open"></i>
+			<h3>审计详情</h3>
+		</div>
+
+		<div class="widget-content">
+			<table class="table table-bordered">
+				<tr>
+					<th width="160">ID</th>
+					<td>{{.data.id}}</td>
+				</tr>
+				<tr>
+					<th>时间</th>
+					<td>{{.data.create_time}}</td>
+				</tr>
+				<tr>
+					<th>操作者</th>
+					<td>{{.data.user_name}} #{{.data.user_id}}</td>
+				</tr>
+				<tr>
+					<th>动作</th>
+					<td>{{.data.action_label}} ({{.data.action}})</td>
+				</tr>
+				<tr>
+					<th>对象</th>
+					<td>{{.data.target_type}} #{{.data.target_id}}</td>
+				</tr>
+				<tr>
+					<th>结果</th>
+					<td>{{if eq .data.result 0}}<span class="label label-success">成功</span>{{else}}<span class="label label-important">失败</span>{{end}}</td>
+				</tr>
+				<tr>
+					<th>IP</th>
+					<td>{{.data.ip}}</td>
+				</tr>
+				<tr>
+					<th>User-Agent</th>
+					<td>{{.data.user_agent}}</td>
+				</tr>
+				<tr>
+					<th>请求</th>
+					<td>{{.data.request_method}} {{.data.request_path}}</td>
+				</tr>
+				<tr>
+					<th>详情</th>
+					<td><pre style="white-space: pre-wrap;">{{.data.detail_pretty}}</pre></td>
+				</tr>
+			</table>
+			<div class="form-actions">
+				<a href="{{urlfor "OperationLogController.List"}}" class="btn">返 回</a>
+			</div>
+		</div>
+	</div>
+</div>
+</div>

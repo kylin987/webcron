@@ -35,10 +35,14 @@ func main() {
 	beego.Router("/login", &controllers.MainController{}, "*:Login")
 	beego.Router("/logout", &controllers.MainController{}, "*:Logout")
 	beego.Router("/profile", &controllers.MainController{}, "*:Profile")
+	beego.Router("/mfa/setup", &controllers.MainController{}, "*:MfaSetup")
+	beego.Router("/mfa/verify", &controllers.MainController{}, "*:MfaVerify")
 	beego.Router("/gettime", &controllers.MainController{}, "*:GetTime")
 	beego.Router("/help", &controllers.HelpController{}, "*:Index")
 	beego.AutoRouter(&controllers.TaskController{})
 	beego.AutoRouter(&controllers.GroupController{})
+	beego.AutoRouter(&controllers.UserController{})
+	beego.AutoRouter(&controllers.OperationLogController{})
 
 	beego.BConfig.WebConfig.Session.SessionOn = true
 	beego.Run()
