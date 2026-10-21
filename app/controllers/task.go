@@ -6,6 +6,7 @@ import (
 	"github.com/lisijie/webcron/app/jobs"
 	"github.com/lisijie/webcron/app/libs"
 	"github.com/lisijie/webcron/app/models"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -23,6 +24,13 @@ func (this *TaskController) List() {
 	}
 	groupId, _ := this.GetInt("groupid")
 	keyword := strings.TrimSpace(this.GetString("keyword"))
+	tag := strings.TrimSpace(this.GetString("tag"))
+	resultFilter := this.GetString("result")
+	switch resultFilter {
+	case "failed", "success", "timeout":
+	default:
+		resultFilter = ""
+	}
 
 	filters := make([]interface{}, 0)
 	if groupId > 0 {
@@ -31,7 +39,30 @@ func (this *TaskController) List() {
 	if keyword != "" {
 		filters = append(filters, "task_name__contains", keyword)
 	}
+	if tag != "" {
+		filters = append(filters, "Tags__Name", tag)
+	}
+	switch resultFilter {
+	case "failed":
+		filters = append(filters, "last_status__lt", 0)
+	case "success":
+		filters = append(filters, "last_log_id__gt", 0, "last_status", models.TASK_SUCCESS)
+	case "timeout":
+		filters = append(filters, "last_status", models.TASK_TIMEOUT)
+	}
 	result, count := models.TaskGetList(page, this.pageSize, filters...)
+	taskIDs := make([]int, 0, len(result))
+	for _, task := range result {
+		taskIDs = append(taskIDs, task.Id)
+	}
+	taskTags, err := models.TaskTagsByTaskIDs(taskIDs)
+	if err != nil {
+		this.showMsg("读取任务标签失败：" + err.Error())
+	}
+	tagNames, err := models.TaskTagNames()
+	if err != nil {
+		this.showMsg("读取标签列表失败：" + err.Error())
+	}
 
 	// 分组列表
 	groups, _ := models.TaskGroupGetList(1, 100)
@@ -57,6 +88,15 @@ func (this *TaskController) List() {
 		row["id"] = v.Id
 		row["group_name"] = groupNames[v.GroupId]
 		row["name"] = v.TaskName
+		row["command"] = v.Command
+		row["tags"] = taskTags[v.Id]
+		row["last_log_id"] = v.LastLogId
+		row["last_status"] = v.LastStatus
+		row["last_error"] = v.LastError
+		row["last_run_time"] = ""
+		if v.LastLogId > 0 {
+			row["last_run_time"] = beego.Date(time.Unix(v.LastRunTime, 0), "Y-m-d H:i:s")
+		}
 		row["cron_spec"] = v.CronSpec
 		row["status"] = v.Status
 		row["description"] = v.Description
@@ -88,7 +128,12 @@ func (this *TaskController) List() {
 	this.Data["groups"] = groups
 	this.Data["groupid"] = groupId
 	this.Data["keyword"] = keyword
-	this.Data["pageBar"] = libs.NewPager(page, int(count), this.pageSize, beego.URLFor("TaskController.List", "groupid", groupId, "keyword", keyword), true).ToString()
+	this.Data["tag"] = tag
+	this.Data["result"] = resultFilter
+	this.Data["tagNames"] = tagNames
+	this.Data["wideLayout"] = true
+	query := url.Values{"groupid": {strconv.Itoa(groupId)}, "keyword": {keyword}, "tag": {tag}, "result": {resultFilter}}
+	this.Data["pageBar"] = libs.NewPager(page, int(count), this.pageSize, beego.URLFor("TaskController.List")+"?"+query.Encode(), true).ToString()
 	this.display()
 }
 
@@ -101,6 +146,10 @@ func (this *TaskController) Add() {
 		task.GroupId, _ = this.GetInt("group_id")
 		task.TaskName = strings.TrimSpace(this.GetString("task_name"))
 		task.Description = strings.TrimSpace(this.GetString("description"))
+		tags, err := models.ParseTaskTags(this.GetString("tags"))
+		if err != nil {
+			this.ajaxMsg(err.Error(), MSG_ERR)
+		}
 		task.Concurrent, _ = this.GetInt("concurrent")
 		task.CronSpec = strings.TrimSpace(this.GetString("cron_spec"))
 		task.Command = strings.TrimSpace(this.GetString("command"))
@@ -128,18 +177,22 @@ func (this *TaskController) Add() {
 		if _, err := libcron.Parse(task.CronSpec); err != nil {
 			this.ajaxMsg("cron表达式无效", MSG_ERR)
 		}
-		id, err := models.TaskAdd(task)
+		err = models.TaskSaveWithTags(task, tags)
 		if err != nil {
 			this.ajaxMsg(err.Error(), MSG_ERR)
 		}
-		task.Id = int(id)
-		this.audit("task_create", "task", task.Id, models.OP_RESULT_OK, taskSnapshot(task))
+		this.audit("task_create", "task", task.Id, models.OP_RESULT_OK, map[string]interface{}{"task": taskSnapshot(task), "tags": tags})
 
 		this.ajaxMsg("", MSG_OK)
 	}
 
 	// 分组列表
 	groups, _ := models.TaskGroupGetList(1, 100)
+	tagNames, err := models.TaskTagNames()
+	if err != nil {
+		this.showMsg("读取标签列表失败：" + err.Error())
+	}
+	this.Data["tagNames"] = tagNames
 	this.Data["groups"] = groups
 	this.Data["pageTitle"] = "添加任务"
 	this.display()
@@ -154,10 +207,18 @@ func (this *TaskController) Edit() {
 		this.showMsg(err.Error())
 	}
 
+	existingTags, err := models.TaskTagsByTaskIDs([]int{task.Id})
+	if err != nil {
+		this.showMsg("读取任务标签失败：" + err.Error())
+	}
 	if this.isPost() {
 		before := taskSnapshot(task)
 		task.TaskName = strings.TrimSpace(this.GetString("task_name"))
 		task.Description = strings.TrimSpace(this.GetString("description"))
+		tags, err := models.ParseTaskTags(this.GetString("tags"))
+		if err != nil {
+			this.ajaxMsg(err.Error(), MSG_ERR)
+		}
 		task.GroupId, _ = this.GetInt("group_id")
 		task.Concurrent, _ = this.GetInt("concurrent")
 		task.CronSpec = strings.TrimSpace(this.GetString("cron_spec"))
@@ -186,12 +247,14 @@ func (this *TaskController) Edit() {
 		if _, err := libcron.Parse(task.CronSpec); err != nil {
 			this.ajaxMsg("cron表达式无效", MSG_ERR)
 		}
-		if err := task.Update(); err != nil {
+		if err := models.TaskSaveWithTags(task, tags); err != nil {
 			this.ajaxMsg(err.Error(), MSG_ERR)
 		}
 		this.audit("task_update", "task", task.Id, models.OP_RESULT_OK, map[string]interface{}{
-			"before": before,
-			"after":  taskSnapshot(task),
+			"before":      before,
+			"after":       taskSnapshot(task),
+			"tags_before": existingTags[task.Id],
+			"tags_after":  tags,
 		})
 
 		this.ajaxMsg("", MSG_OK)
@@ -199,8 +262,14 @@ func (this *TaskController) Edit() {
 
 	// 分组列表
 	groups, _ := models.TaskGroupGetList(1, 100)
+	tagNames, err := models.TaskTagNames()
+	if err != nil {
+		this.showMsg("读取标签列表失败：" + err.Error())
+	}
+	this.Data["tagNames"] = tagNames
 	this.Data["groups"] = groups
 	this.Data["task"] = task
+	this.Data["tagsText"] = strings.Join(existingTags[task.Id], ", ")
 	this.Data["pageTitle"] = "编辑任务"
 	this.display()
 }

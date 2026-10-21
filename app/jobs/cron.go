@@ -62,6 +62,18 @@ func RemoveJob(id int) {
 	})
 }
 
+// AddSystemJob 注册系统级定时任务（不依赖 t_task 表，如日志清理）。
+// 本地模式下跳过，避免本地连线上库触发清理。
+func AddSystemJob(spec string, cmd func()) error {
+	if IsLocalMode() {
+		beego.Info("本地模式已开启，跳过系统任务注册")
+		return nil
+	}
+	lock.Lock()
+	defer lock.Unlock()
+	return mainCron.AddFunc(spec, cmd)
+}
+
 func GetEntryById(id int) *cron.Entry {
 	entries := mainCron.Entries()
 	for _, e := range entries {
@@ -75,9 +87,15 @@ func GetEntryById(id int) *cron.Entry {
 }
 
 func GetEntries(size int) []*cron.Entry {
-	ret := mainCron.Entries()
-	if len(ret) > size {
-		return ret[:size]
+	ret := make([]*cron.Entry, 0)
+	for _, e := range mainCron.Entries() {
+		if _, ok := e.Job.(*Job); !ok {
+			continue
+		}
+		ret = append(ret, e)
+		if size > 0 && len(ret) >= size {
+			break
+		}
 	}
 	return ret
 }

@@ -20,7 +20,7 @@
 						<td><a href="{{urlfor "TaskController.Logs" "id" $v.task_id}}" class="news-item-title">{{$v.task_name}} # {{$v.task_id}}</a></td>
 						<td>{{$v.next_time}}</td>
 					</tr>
-				{{end}}
+				{{else}}<tr><td colspan="2" class="muted">暂无待执行任务</td></tr>{{end}}
 				</tbody>
 				</table>
 			</div>
@@ -30,7 +30,7 @@
 		
 		<div class="widget widget-nopad">
 			<div class="widget-header"> <i class="icon-list-alt"></i>
-				<h3>执行失败的任务</h3>
+				<h3>最近失败记录（含已恢复任务）</h3>
 			</div>
 			<!-- /widget-header -->
 			<div class="widget-content">

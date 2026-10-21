@@ -15,6 +15,7 @@ const VERSION = "1.0.0"
 func main() {
 	models.Init()
 	jobs.InitJobs()
+	jobs.RegisterCleanupJob()
 
 	// 设置默认404页面
 	beego.ErrorHandler("404", func(rw http.ResponseWriter, r *http.Request) {
@@ -37,6 +38,7 @@ func main() {
 	beego.Router("/profile", &controllers.MainController{}, "*:Profile")
 	beego.Router("/mfa/setup", &controllers.MainController{}, "*:MfaSetup")
 	beego.Router("/mfa/verify", &controllers.MainController{}, "*:MfaVerify")
+	beego.Router("/failures/summary", &controllers.MainController{}, "get:FailureSummary")
 	beego.Router("/gettime", &controllers.MainController{}, "*:GetTime")
 	beego.Router("/help", &controllers.HelpController{}, "*:Index")
 	beego.AutoRouter(&controllers.TaskController{})

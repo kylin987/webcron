@@ -42,6 +42,21 @@
 	$ nohup ./webcron 2>&1 > error.log &
 	设为后台运行
 
+服务管理
+
+	$ ./run.sh start
+	$ ./run.sh stop
+	$ ./run.sh restart
+
+如果脚本没有执行权限，先执行：
+
+	$ chmod +x run.sh
+
+查看进程和日志：
+
+	$ ps -ef | grep '[w]ebcron'
+	$ tail -n 50 info.log
+
 访问： 
 
 http://localhost:8000

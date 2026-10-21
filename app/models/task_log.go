@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"github.com/astaxie/beego/orm"
 )
 
@@ -19,7 +20,24 @@ func (t *TaskLog) TableName() string {
 }
 
 func TaskLogAdd(t *TaskLog) (int64, error) {
-	return orm.NewOrm().Insert(t)
+	o := orm.NewOrm()
+	if err := o.Begin(); err != nil {
+		return 0, err
+	}
+	defer o.Rollback()
+	id, err := o.Insert(t)
+	if err != nil {
+		return 0, err
+	}
+	// Preserve completion order even when concurrent executions commit out of order.
+	query := fmt.Sprintf("UPDATE `%s` SET last_log_id=?,last_status=?,last_run_time=?,last_error=LEFT(?,300) WHERE id=? AND last_log_id<?", TableName("task"))
+	if _, err = o.Raw(query, id, t.Status, t.CreateTime, t.Error, t.TaskId, id).Exec(); err != nil {
+		return 0, err
+	}
+	if err = o.Commit(); err != nil {
+		return 0, err
+	}
+	return id, nil
 }
 
 func TaskLogGetList(page, pageSize int, filters ...interface{}) ([]*TaskLog, int64) {
@@ -60,4 +78,9 @@ func TaskLogDelById(id int) error {
 
 func TaskLogDelByTaskId(taskId int) (int64, error) {
 	return orm.NewOrm().QueryTable(TableName("task_log")).Filter("task_id", taskId).Delete()
+}
+
+// TaskLogDelByTime 删除指定时间戳之前的任务执行记录，返回删除行数。
+func TaskLogDelByTime(before int64) (int64, error) {
+	return orm.NewOrm().QueryTable(TableName("task_log")).Filter("create_time__lt", before).Delete()
 }

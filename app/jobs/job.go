@@ -145,7 +145,11 @@ func (j *Job) Run() {
 		log.Status = models.TASK_ERROR
 		log.Error = err.Error() + ":" + cmdErr
 	}
-	j.logId, _ = models.TaskLogAdd(log)
+	var logErr error
+	j.logId, logErr = models.TaskLogAdd(log)
+	if logErr != nil {
+		beego.Error("保存任务执行结果失败：", j.id, logErr)
+	}
 
 	// 更新上次执行时间
 	j.task.PrevTime = t.Unix()
@@ -153,7 +157,7 @@ func (j *Job) Run() {
 	j.task.Update("PrevTime", "ExecuteTimes")
 
 	// 发送邮件通知
-	if (j.task.Notify == 1 && err != nil) || j.task.Notify == 2 {
+	if shouldNotify(j.task.Notify, err != nil, isTimeout) {
 		user, uerr := models.UserGetById(j.task.UserId)
 		if uerr != nil {
 			return
@@ -190,4 +194,8 @@ func (j *Job) Run() {
 			beego.Error("发送邮件超时：", user.Email)
 		}
 	}
+}
+
+func shouldNotify(mode int, failed, timeout bool) bool {
+	return mode == 2 || (mode == 1 && (failed || timeout))
 }

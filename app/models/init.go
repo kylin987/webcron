@@ -17,13 +17,13 @@ func Init() {
 	if dbport == "" {
 		dbport = "3306"
 	}
-	dsn := dbuser + ":" + dbpassword + "@tcp(" + dbhost + ":" + dbport + ")/" + dbname + "?charset=utf8"
+	dsn := dbuser + ":" + dbpassword + "@tcp(" + dbhost + ":" + dbport + ")/" + dbname + "?charset=utf8mb4"
 	if timezone != "" {
 		dsn = dsn + "&loc=" + url.QueryEscape(timezone)
 	}
 	orm.RegisterDataBase("default", "mysql", dsn)
 
-	orm.RegisterModel(new(User), new(Task), new(TaskGroup), new(TaskLog), new(OperationLog))
+	orm.RegisterModel(new(User), new(Task), new(TaskTag), new(TaskGroup), new(TaskLog), new(OperationLog))
 
 	if beego.AppConfig.String("runmode") == "dev" {
 		orm.Debug = true

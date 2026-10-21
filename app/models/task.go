@@ -13,6 +13,7 @@ const (
 )
 
 type Task struct {
+	Tags         []*TaskTag `orm:"reverse(many)"`
 	Id           int
 	UserId       int
 	GroupId      int
@@ -29,6 +30,10 @@ type Task struct {
 	ExecuteTimes int
 	PrevTime     int64
 	CreateTime   int64
+	LastLogId    int64
+	LastStatus   int
+	LastRunTime  int64
+	LastError    string `orm:"size(300)"`
 }
 
 func (t *Task) TableName() string {
@@ -36,6 +41,10 @@ func (t *Task) TableName() string {
 }
 
 func (t *Task) Update(fields ...string) error {
+	// Latest execution fields are owned by TaskLogAdd, never by scheduler snapshots.
+	if len(fields) == 0 {
+		fields = []string{"UserId", "GroupId", "TaskName", "TaskType", "Description", "CronSpec", "Concurrent", "Command", "Status", "Notify", "NotifyEmail", "Timeout", "ExecuteTimes", "PrevTime", "CreateTime"}
+	}
 	if _, err := orm.NewOrm().Update(t, fields...); err != nil {
 		return err
 	}
@@ -95,6 +104,19 @@ func TaskGetById(id int) (*Task, error) {
 }
 
 func TaskDel(id int) error {
-	_, err := orm.NewOrm().QueryTable(TableName("task")).Filter("id", id).Delete()
-	return err
+	o := orm.NewOrm()
+	if err := o.Begin(); err != nil {
+		return err
+	}
+	defer o.Rollback()
+	if err := o.ReadForUpdate(&Task{Id: id}); err != nil {
+		return err
+	}
+	if _, err := o.QueryTable(TableName("task_tag")).Filter("task_id", id).Delete(); err != nil {
+		return err
+	}
+	if _, err := o.QueryTable(TableName("task")).Filter("id", id).Delete(); err != nil {
+		return err
+	}
+	return o.Commit()
 }

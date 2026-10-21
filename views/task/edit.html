@@ -22,6 +22,21 @@
 					</div>				
 				</div>
 				
+
+                <div class="control-group">
+                    <label class="control-label" for="tags">标签</label>
+                    <div class="controls">
+                        <input type="text" name="tags" id="tags" class="span6" value="{{.tagsText}}" placeholder="例如：生产环境, 数据同步" aria-describedby="tags-help">
+                        <p class="help-block" id="tags-help">多个标签用逗号分隔，每个标签最多30字，最多20个。清空可移除所有标签。</p>
+                        {{if .tagNames}}
+                        <div class="task-tag-suggestions">
+                            <span class="muted">点击添加已有标签：</span>
+                            {{range .tagNames}}<button type="button" class="btn btn-mini task-tag-option">{{.}}</button> {{end}}
+                        </div>
+                        {{end}}
+                    </div>
+                </div>
+
 				<div class="control-group">											
 					<label class="control-label" for="description">任务说明</label>
 					<div class="controls">
@@ -117,6 +132,14 @@
 
 <script>
 $(function () {
+    $(".task-tag-option").click(function () {
+        var input = $("#tags"), name = $(this).text(), tags = input.val().split(/[,，\r\n]+/);
+        for (var i = 0; i < tags.length; i++) {
+            if ($.trim(tags[i]) === name) { return; }
+        }
+        var current = $.trim(input.val());
+        input.val(current ? current + ", " + name : name);
+    });
 	$("form").submit(function () {
 		$(".alert").hide();
 		$("button[type='submit']").attr('disabled', true);

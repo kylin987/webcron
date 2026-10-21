@@ -26,58 +26,53 @@ func (this *MainController) Index() {
 	jobList := make([]map[string]interface{}, len(entries))
 	for k, v := range entries {
 		row := make(map[string]interface{})
-		job := v.Job.(*jobs.Job)
+		job, ok := v.Job.(*jobs.Job)
+		if !ok {
+			continue
+		}
 		row["task_id"] = job.GetId()
 		row["task_name"] = job.GetName()
 		row["next_time"] = beego.Date(v.Next, "Y-m-d H:i:s")
 		jobList[k] = row
 	}
 
-	// 最近执行的日志
-	logs, _ := models.TaskLogGetList(1, 20)
-	recentLogs := make([]map[string]interface{}, len(logs))
-	for k, v := range logs {
-		task, err := models.TaskGetById(v.TaskId)
-		taskName := ""
-		if err == nil {
-			taskName = task.TaskName
-		}
-		row := make(map[string]interface{})
-		row["task_name"] = taskName
-		row["id"] = v.Id
-		row["start_time"] = beego.Date(time.Unix(v.CreateTime, 0), "Y-m-d H:i:s")
-		row["process_time"] = float64(v.ProcessTime) / 1000
-		row["ouput_size"] = libs.SizeFormat(float64(len(v.Output)))
-		row["output"] = beego.Substr(v.Output, 0, 100)
-		row["status"] = v.Status
-		recentLogs[k] = row
+	// Overview queries return a fixed number of summaries, without counts or N+1 reads.
+	recent, err := models.DashboardLogs(false)
+	if err != nil {
+		this.showMsg("读取最近执行记录失败：" + err.Error())
 	}
-
-	// 最近执行失败的日志
-	logs, _ = models.TaskLogGetList(1, 20, "status__lt", 0)
-	errLogs := make([]map[string]interface{}, len(logs))
-	for k, v := range logs {
-		task, err := models.TaskGetById(v.TaskId)
-		taskName := ""
-		if err == nil {
-			taskName = task.TaskName
-		}
-		row := make(map[string]interface{})
-		row["task_name"] = taskName
-		row["id"] = v.Id
-		row["start_time"] = beego.Date(time.Unix(v.CreateTime, 0), "Y-m-d H:i:s")
-		row["process_time"] = float64(v.ProcessTime) / 1000
-		row["ouput_size"] = libs.SizeFormat(float64(len(v.Output)))
-		row["error"] = beego.Substr(v.Error, 0, 100)
-		row["status"] = v.Status
-		errLogs[k] = row
+	failed, err := models.DashboardLogs(true)
+	if err != nil {
+		this.showMsg("读取失败记录失败：" + err.Error())
 	}
+	recentLogs := dashboardRows(recent)
+	errLogs := dashboardRows(failed)
 
 	this.Data["recentLogs"] = recentLogs
 	this.Data["errLogs"] = errLogs
 	this.Data["jobs"] = jobList
 	this.Data["cpuNum"] = runtime.NumCPU()
 	this.display()
+}
+
+func dashboardRows(logs []models.DashboardLog) []map[string]interface{} {
+	rows := make([]map[string]interface{}, 0, len(logs))
+	for _, v := range logs {
+		rows = append(rows, map[string]interface{}{"task_name": v.TaskName, "task_id": v.TaskId, "id": v.Id, "start_time": beego.Date(time.Unix(v.CreateTime, 0), "Y-m-d H:i:s"), "process_time": float64(v.ProcessTime) / 1000, "ouput_size": libs.SizeFormat(float64(v.OutputSize)), "output": v.Output, "error": v.Error, "status": v.Status})
+	}
+	return rows
+}
+
+// FailureSummary reports current failures; a later successful execution clears them.
+func (this *MainController) FailureSummary() {
+	summary, err := models.CurrentFailedTasks()
+	if err != nil {
+		beego.Error("读取失败任务摘要失败：", err)
+		this.Ctx.Output.SetStatus(503)
+		this.jsonResult(map[string]interface{}{"error": "读取失败任务摘要失败"})
+	}
+	this.Ctx.Output.Header("Cache-Control", "no-store")
+	this.jsonResult(summary)
 }
 
 // 个人信息

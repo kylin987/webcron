@@ -1,4 +1,9 @@
 CREATE TABLE `t_task` (
+  `last_log_id` bigint(20) unsigned NOT NULL DEFAULT '0' COMMENT '最近完成的日志ID',
+  `last_status` tinyint(4) NOT NULL DEFAULT '0' COMMENT '最近结果 0成功 -1失败 -2超时',
+  `last_run_time` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '最近完成执行的开始时间',
+  `last_error` varchar(300) NOT NULL DEFAULT '' COMMENT '最近错误摘要',
+
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` int(11) NOT NULL DEFAULT '0' COMMENT '用户ID',
   `group_id` int(11) NOT NULL DEFAULT '0' COMMENT '分组ID',
@@ -17,7 +22,8 @@ CREATE TABLE `t_task` (
   `create_time` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '创建时间',
   PRIMARY KEY (`id`),
   KEY `idx_user_id` (`user_id`),
-  KEY `idx_group_id` (`group_id`)
+  KEY `idx_group_id` (`group_id`),
+  KEY `idx_last_status` (`last_status`, `id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE `t_task_group` (
@@ -40,7 +46,8 @@ CREATE TABLE `t_task_log` (
   `process_time` int(11) NOT NULL DEFAULT '0' COMMENT '消耗时间/毫秒',
   `create_time` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '创建时间',
   PRIMARY KEY (`id`),
-  KEY `idx_task_id` (`task_id`,`create_time`)
+  KEY `idx_task_id` (`task_id`,`create_time`),
+  KEY `idx_status_id` (`status`,`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 
@@ -83,3 +90,12 @@ CREATE TABLE `t_operation_log` (
 
 INSERT INTO `t_user` (`id`, `user_name`, `email`, `password`, `salt`, `last_login`, `last_ip`, `status`)
 VALUES (1,'admin','admin@example.com','7fef6171469e80d32c0559f88b377245','',0,'',0);
+
+CREATE TABLE `t_task_tag` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `task_id` int(11) unsigned NOT NULL COMMENT '任务ID',
+  `name` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '标签名称',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_task_name` (`task_id`, `name`),
+  KEY `idx_name_task` (`name`, `task_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
