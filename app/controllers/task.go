@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"github.com/astaxie/beego"
+	"github.com/astaxie/beego/orm"
 	libcron "github.com/lisijie/cron"
 	"github.com/lisijie/webcron/app/jobs"
 	"github.com/lisijie/webcron/app/libs"
@@ -269,6 +270,14 @@ func (this *TaskController) Edit() {
 	this.Data["tagNames"] = tagNames
 	this.Data["groups"] = groups
 	this.Data["task"] = task
+	creatorName := "账号已删除或不存在"
+	creator, err := models.UserGetById(task.UserId)
+	if err == nil {
+		creatorName = creator.UserName
+	} else if err != orm.ErrNoRows {
+		this.showMsg("读取提交人失败：" + err.Error())
+	}
+	this.Data["creatorName"] = creatorName
 	this.Data["tagsText"] = strings.Join(existingTags[task.Id], ", ")
 	this.Data["pageTitle"] = "编辑任务"
 	this.display()

@@ -24,6 +24,13 @@
 				
 
                 <div class="control-group">
+                    <div class="control-label">提交人</div>
+                    <div class="controls">
+                        <span id="task-creator" class="help-block">{{.creatorName}}（用户 ID：{{.task.UserId}}）</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
                     <label class="control-label" for="tags">标签</label>
                     <div class="controls">
                         <input type="text" name="tags" id="tags" class="span6" value="{{.tagsText}}" placeholder="例如：生产环境, 数据同步" aria-describedby="tags-help">
